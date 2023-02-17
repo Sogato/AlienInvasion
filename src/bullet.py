@@ -21,7 +21,6 @@ class Bullet(Sprite):
 
         # Позиция снаряда хранится в вещественном формате.
         self.y = float(self.rect.y)
-        print(self.rect.midtop)
 
     def update(self):
         """Перемещает снаряд вверх по экрану."""

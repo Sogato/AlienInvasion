@@ -6,14 +6,21 @@ class Settings:
         # Параметры экрана
         self.screen_width = 1920
         self.screen_height = 1080
-        self.bg_color = (135, 206, 250)
+        self.bg_color = (230, 230, 230)
 
-        # Параметры экрана
-        self.ship_speed = 1
+        # Параметры корабля
+        self.ship_speed = 1.0
+        self.ship_limit = 3
 
         # Параметры снаряда
-        self.bullet_speed = 1
-        self.bullet_width = 4
+        self.bullet_speed = 1.0
+        self.bullet_width = 800
         self.bullet_height = 20
         self.bullet_color = (60, 60, 60)
-        self.bullets_allowed = 5
+        self.bullets_allowed = 100
+
+        # Параметры пришельцев
+        self.alien_speed = 0.5
+        self.fleet_drop_speed = 50
+        # fleet_direction = 1 обозначает движение вправо, а -1 - влево.
+        self.fleet_direction = 1
