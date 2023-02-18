@@ -4,9 +4,11 @@ from time import sleep
 
 from src.settings import Settings
 from src.game_stats import GameStats
+from src.scoreboard import Scoreboard
 from src.ship import Ship
 from src.bullet import Bullet
 from src.alien import Alien
+from src.button import Button
 
 
 class AlienInvasion:
@@ -21,12 +23,17 @@ class AlienInvasion:
         self.settings.screen_height = self.screen.get_rect().height
         pygame.display.set_caption("Alien Invasion")
 
+        # Создание экземпляров для хранения статистики и панели результатов.
         self.stats = GameStats(self)
+        self.sb = Scoreboard(self)
         self.ship = Ship(self.settings, self.screen)
         self.bullets = pygame.sprite.Group()
         self.aliens = pygame.sprite.Group()
 
         self._create_fleet()
+
+        # Создание кнопки Play.
+        self.play_button = Button(self, 'Play')
 
     def run_game(self):
         """Запуск основного цикла игры."""
@@ -43,12 +50,39 @@ class AlienInvasion:
     def _check_events(self):
         """Обрабатывет нажатие клавиш и мыши."""
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
+            if event.type == pygame.KEYDOWN:
                 self._check_keydown_events(event)
             elif event.type == pygame.KEYUP:
                 self._check_keyup_events(event)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                self._check_play_button(mouse_pos)
+            elif event.type == pygame.QUIT:
+                sys.exit()
+
+    def _check_play_button(self, mouse_pos):
+        button_clicked = self.play_button.rect.collidepoint(mouse_pos)
+        if button_clicked and not self.stats.game_active:
+            # Сброс игровых настроек.
+            self.settings.initialize_dynamic_settings()
+
+            # Сброс игровой статистики.
+            self.stats.reset_stats()
+            self.stats.game_active = True
+            self.sb.prep_score()
+            self.sb.prep_level()
+            self.sb.prep_ships()
+
+            # Очистка списков пришельцев и снарядов.
+            self.aliens.empty()
+            self.bullets.empty()
+
+            # Создание нового флота и размещение корабля в центре.
+            self._create_fleet()
+            self.ship.center_ship()
+
+            # Указатель мыши скрывается.
+            pygame.mouse.set_visible(False)
 
     def _check_keydown_events(self, event):
         """Реагирует на нажатие клавиш."""
@@ -74,26 +108,28 @@ class AlienInvasion:
         # Интервал между соседними пришельцами равен ширине пришельца.
         alien = Alien(self)
         alien_width, alien_height = alien.rect.size
-        available_space_x = self.settings.screen_width - (2 * alien_width)
+        available_space_x = self.settings.screen_width - (3 * alien_width)
         number_aliens_x = available_space_x // (2 * alien_width)
 
         # Определяет количество рядов, помещающихся на экране.
-        ship_height = self.ship.rect.height
+        ship_height = 2 * self.ship.rect.height
         available_space_y = (self.settings.screen_height - (3 * alien_height) - 2 * ship_height)
         number_rows = available_space_y // (2 * alien_height)
 
         # Создание флота пришельцев.
         for row_number in range(number_rows):
             for alien_number in range(number_aliens_x):
-                self._create_alien(alien_number, row_number)
+                self._create_alien(alien_number, row_number, number_aliens_x)
 
-    def _create_alien(self, alien_number, row_number):
+    def _create_alien(self, alien_number, row_number, number_aliens_x):
         """Создание пришельца и размещение его в ряду."""
         alien = Alien(self)
         alien_width, alien_height = alien.rect.size
-        alien.x = alien_width + 2 * alien_width * alien_number
+        temp = (self.settings.screen_width - alien_width * number_aliens_x - alien_width * (number_aliens_x - 1)) / 2
+
+        alien.x = temp + 2 * alien_width * alien_number
         alien.rect.x = alien.x
-        alien.rect.y = alien_height + 2 * alien_height * row_number
+        alien.rect.y = 2 * alien_height + 2 * alien_height * row_number
         self.aliens.add(alien)
 
     def _update_aliens(self):
@@ -134,7 +170,7 @@ class AlienInvasion:
         if self.stats.ships_left > 0:
             # Уменьшение ships_left.
             self.stats.ships_left -= 1
-            print(self.stats.ships_left)
+            self.sb.prep_ships()
 
             # Очистка списков пришельцев и снарядов.
             self.aliens.empty()
@@ -146,6 +182,7 @@ class AlienInvasion:
             sleep(0.5)
         else:
             self.stats.game_active = False
+            pygame.mouse.set_visible(True)
 
     def _fire_bullet(self):
         """Создание нового снаряда и включение его в группу bullets."""
@@ -168,12 +205,23 @@ class AlienInvasion:
     def _check_bullet_alien_collisions(self):
         """Обработка коллизий снарядов с пришельцами."""
         # Удаление снарядов и пришельцев, участвующих в коллизиях.
-        pygame.sprite.groupcollide(self.bullets, self.aliens, False, True)
+        collisions = pygame.sprite.groupcollide(self.bullets, self.aliens, True, True)
+
+        if collisions:
+            for aliens in collisions.values():
+                self.stats.score += self.settings.alien_points * len(aliens)
+            self.sb.prep_score()
+            self.sb.check_high_score()
 
         if not self.aliens:
             # Уничтожение существующих снарядов и создание нового флота.
             self.bullets.empty()
+            self.settings.increase_speed()
             self._create_fleet()
+
+            # Увеличение уровня.
+            self.stats.level += 1
+            self.sb.prep_level()
 
     def _update_screen(self):
         """Обновляет изображения на экране и отображает новый экран."""
@@ -182,6 +230,13 @@ class AlienInvasion:
         for bullet in self.bullets.sprites():
             bullet.draw_bullet()
         self.aliens.draw(self.screen)
+
+        # Вывод информации о счете.
+        self.sb.show_score()
+
+        # Кнопка Play отображается в том случае, если игра неактивна.
+        if not self.stats.game_active:
+            self.play_button.draw_button()
 
         pygame.display.flip()
 
