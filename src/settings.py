@@ -20,7 +20,7 @@ class Settings:
         # Параметры снаряда
         self.bullet_width = 4
         self.bullet_height = 20
-        self.bullet_color = (60, 60, 60)
+        self.bullet_color = (255, 0, 60)
         self.bullets_allowed = 25
 
         # Параметры пришельцев
